@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Task Dashboard Pro</title>
+    <style>
+        :root { 
+            --accent: #b4c9ff; /* Neon pink for Nyan flavor */
+            --bg: #003366;    /* Deep space blue */
+        }
+
+        body { 
+    margin: 0;
+    padding: 20px;
+    font-family: 'Segoe UI', sans-serif;
+    
+    /* 1. The Nyan Cat Starfield Background */
+    /* You can replace this URL with a specific Nyan Cat GIF if you have one */
+    background-image: url('https://i.pinimg.com/originals/ef/1d/42/ef1d427563f9971b0766c19e0ef3b981.gif');
+    background-repeat: repeat;
+    background-size: 200px; /* Adjust size of the cats/stars */
+    
+    /* 2. The Animation */
+    animation: nyanScroll 20s linear infinite;
+}
+
+/* 3. The Scrolling Logic */
+@keyframes nyanScroll {
+    from { background-position: 0 0; }
+    to { background-position: -1000px 0; } /* Moves the background left */
+}
+
+/* Optional: Make the container slightly transparent to see the cats behind it */
+.container { 
+    max-width: 950px; 
+    margin: auto; 
+    background: rgba(255, 255, 255, 0.65); /* Glass effect */
+    backdrop-filter: blur(5px);
+    padding: 25px; 
+    border-radius: 15px; 
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+    border: 3px solid rgb(180, 201, 255); /* Rainbow-ish border */
+}
+
+        .container { max-width: 950px; margin: auto; padding: 25px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        
+        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .total-gauge { background: #333; color: white; padding: 6px 15px; border-radius: 20px; font-size: 0.9em; font-weight: bold; }
+        
+        .tab-nav { display: flex; gap: 10px; border-bottom: 2px solid #eee; margin-bottom: 20px; }
+        .tab-btn { padding: 12px 20px; cursor: pointer; border: none; background: none; font-weight: bold; color: #999; border-bottom: 3px solid transparent; }
+        .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; padding: 15px; border-radius: 10px; }
+        input, select { padding: 10px; border: 1px solid #ddd; border-radius: 6px; }
+        .btn { padding: 10px 15px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; }
+
+        .task-card { padding: 15px; margin-bottom: 12px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.05); transition: 0.3s; position: relative; }
+        .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .sec-cat-label { font-size: 0.75em; font-weight: 800; opacity: 0.5; text-transform: uppercase; }
+        
+        /* Envío Masivo Styles */
+        .progress-wrapper { position: relative; height: 30px; background: rgba(255,255,255,0.4); border-radius: 15px; overflow: hidden; border: 1px solid rgba(0,0,0,0.1); }
+        .progress-fill { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; pointer-events: none; }
+        .live-slider { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
+        /* Validación Styles */
+        .status-select { padding: 5px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); font-weight: bold; }
+        .val-pending { background-color: #ffcdd2 !important; }
+        .val-in-progress { background-color: #fff9c4 !important; }
+        .val-finished { background-color: #c8e6c9 !important; }
+
+        .btn-row { display: flex; gap: 5px; align-items: center; }
+        .mini-btn { background: none; border: 1px solid rgba(0,0,0,0.2); color: #666; font-size: 10px; padding: 3px 6px; border-radius: 4px; cursor: pointer; }
+        .restore-btn { background: #17a2b8; color: white; border: none; }
+        
+        .delete-btn {
+            background: none; border: none; color: #dc3545; font-size: 16px; font-weight: bold;
+            cursor: pointer; padding: 0 5px; margin-left: 10px; line-height: 1; transition: 0.2s;
+        }
+        .delete-btn:hover { color: #a71d2a; transform: scale(1.2); }
+
+        /* Modal Styles */
+        .modal { 
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.5); align-items: center; justify-content: center; 
+        }
+        .modal-content { 
+            background: white; padding: 25px; border-radius: 15px; width: 90%; max-width: 400px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); 
+        }
+        .modal-content h3 { margin-top: 0; }
+        .modal-content .input-grid { grid-template-columns: 1fr; background: none; padding: 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-flex">
+        <h2>Task Meter <span id="globalPercentage" class="total-gauge">0% Total</span></h2>
+        <div class="tab-nav">
+            <button class="tab-btn active" id="btn-envio" onclick="switchTab('envio')">Envío Masivo</button>
+            <button class="tab-btn" id="btn-validacion" onclick="switchTab('validacion')">Validación</button>
+        </div>
+    </div>
+
+    <div class="input-grid">
+        <input type="text" id="searchTxt" placeholder="🔍 Search Type, Core, or Date..." onkeyup="updateFilters(); renderAll()">
+        <input type="date" id="searchDate" onchange="updateFilters(); renderAll()">
+        <select id="filterType" onchange="updateFilters(); renderAll()"><option value="">All Types</option></select>
+        <select id="filterCore" onchange="updateFilters(); renderAll()"><option value="">All Cores</option></select>
+        <input type="time" id="filterTime" onchange="updateFilters(); renderAll()">
+        <select id="sortOrder" onchange="updateFilters(); renderAll()">
+            <option value="desc">Newest First</option>
+            <option value="asc">Oldest First</option>
+        </select>
+        <button class="btn" style="background:#6c757d" onclick="softClearTab()">Clear View</button>
+        <a id="exportBtn" href="/export/envio" class="btn" style="background:#28a745; text-decoration:none; text-align:center;">CSV</a>
+    </div>
+
+    <div id="tab-envio" class="tab-content active">
+        <div class="input-grid">
+            <select id="env-type"></select>
+            <input type="number" id="env-goal" placeholder="Target">
+            <input type="date" id="env-date">
+            <input type="time" id="env-time">
+            <button class="btn" style="background:var(--accent)" onclick="handleSave('envio')">Add</button>
+        </div>
+        <div id="list-envio"></div>
+    </div>
+
+    <div id="tab-validacion" class="tab-content">
+        <div class="input-grid">
+            <select id="val-type"></select>
+            <select id="val-state">
+                <option value="pending">Pending</option>
+                <option value="in progress">In Progress</option>
+                <option value="finished">Finished</option>
+            </select>
+            <input type="date" id="val-date">
+            <input type="time" id="val-time">
+            <button class="btn" style="background:var(--accent)" onclick="handleSave('validacion')">Add</button>
+        </div>
+        <div id="list-validacion"></div>
+    </div>
+</div>
+
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <h3>Edit Task</h3>
+        <input type="hidden" id="edit-id">
+        <div class="input-grid">
+            <label>Type</label>
+            <select id="edit-type"></select>
+            <label id="edit-goal-label">Target Goal</label>
+            <input type="number" id="edit-goal">
+            <label>Date</label>
+            <input type="date" id="edit-date">
+            <label>Time</label>
+            <input type="time" id="edit-time">
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn" style="background:var(--accent); flex:1" onclick="submitEdit()">Save Changes</button>
+            <button class="btn" style="background:#6c757d; flex:1" onclick="closeModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let allTasks = [];
+    let currentTab = 'envio';
+    const TYPES = ["FOHVENC2", "IBK01", "IBK07", "IBKT1A", "MAFT2T3", "PRYT0A", "SANT1", "SANT2", "SANT2_DED", "BFBT0A", "BFBT3A", "FOHCASTI", "IBK03", "IBK04", "MAFCAST", "BFBT2A", "BFBT6A", "CNCCAST1", "FOHT1A", "IBK08", "IBKHT6", "IBKCIMA", "IBKPREV1", "IBKVTS"];
+
+    let tabFilters = {
+        envio: {
+            search: '',
+            sDate: '',
+            fType: '',
+            fCore: '',
+            fTime: '',
+            sortOrder: 'desc'
+        },
+        validacion: {
+            search: '',
+            sDate: '',
+            fType: '',
+            fCore: '',
+            fTime: '',
+            sortOrder: 'desc'
+        }
+    };
+
+    function init() {
+        const now = new Date();
+        document.getElementById('env-date').value = document.getElementById('val-date').value = now.toISOString().split('T')[0];
+        document.getElementById('env-time').value = document.getElementById('val-time').value = now.toTimeString().slice(0,5);
+        
+        [document.getElementById('env-type'), document.getElementById('val-type')].forEach(s => {
+            TYPES.sort().forEach(t => { let o = document.createElement('option'); o.value = o.text = t; s.add(o); });
+        });
+
+        // Populate filterType
+        const filterType = document.getElementById('filterType');
+        TYPES.sort().forEach(t => { let o = document.createElement('option'); o.value = o.text = t; filterType.add(o); });
+
+        // Populate filterCore
+        const filterCore = document.getElementById('filterCore');
+        const cores = ["CORE 1", "CORE 11", "CORE 21", "General"];
+        cores.forEach(c => { let o = document.createElement('option'); o.value = o.text = c; filterCore.add(o); });
+
+        fetchTasks();
+        updateFilterUI();
+    }
+
+    function updateFilters() {
+        tabFilters[currentTab].search = document.getElementById('searchTxt').value.toLowerCase();
+        tabFilters[currentTab].sDate = document.getElementById('searchDate').value;
+        tabFilters[currentTab].fType = document.getElementById('filterType').value;
+        tabFilters[currentTab].fCore = document.getElementById('filterCore').value;
+        tabFilters[currentTab].fTime = document.getElementById('filterTime').value;
+        tabFilters[currentTab].sortOrder = document.getElementById('sortOrder').value;
+    }
+
+    function updateFilterUI() {
+        const filters = tabFilters[currentTab];
+        document.getElementById('searchTxt').value = filters.search;
+        document.getElementById('searchDate').value = filters.sDate;
+        document.getElementById('filterType').value = filters.fType;
+        document.getElementById('filterCore').value = filters.fCore;
+        document.getElementById('filterTime').value = filters.fTime;
+        document.getElementById('sortOrder').value = filters.sortOrder;
+    }
+
+    function switchTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`btn-${tab}`).classList.add('active');
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById(`tab-${tab}`).classList.add('active');
+        document.getElementById('exportBtn').href = `/export/${tab}`;
+        updateFilterUI();
+        renderAll();
+    }
+
+    function renderAll() {
+        const envioFilters = tabFilters.envio;
+        const valFilters = tabFilters.validacion;
+        renderList('envio', envioFilters.search, envioFilters.sDate, envioFilters.fType, envioFilters.fCore, envioFilters.fTime, envioFilters.sortOrder);
+        renderList('validacion', valFilters.search, valFilters.sDate, valFilters.fType, valFilters.fCore, valFilters.fTime, valFilters.sortOrder);
+        calculateGlobalPerc();
+    }
+
+    function renderList(tab, search, sDate, fType, fCore, fTime, sortOrder) {
+        const container = document.getElementById(`list-${tab}`);
+        container.innerHTML = '';
+        
+        let tasks = allTasks.filter(t => t.tab === tab);
+        
+        // Apply filters
+        let filtered = tasks.filter(task => {
+            const isMatch = (task.type.toLowerCase().includes(search) || task.sec_category.toLowerCase().includes(search) || task.date.includes(search));
+            const dateMatch = sDate ? task.date === sDate : true;
+            const typeMatch = fType ? task.type === fType : true;
+            const coreMatch = fCore ? task.sec_category === fCore : true;
+            const timeMatch = fTime ? task.time === fTime : true;
+
+            if (!search && !sDate && !fType && !fCore && !fTime && task.hidden) return false;
+            if ((search || sDate || fType || fCore || fTime) && (!isMatch || !dateMatch || !typeMatch || !coreMatch || !timeMatch)) return false;
+
+            return true;
+        });
+        
+        // Sort
+        filtered.sort((a, b) => {
+            const aDateTime = new Date(`${a.date}T${a.time}`);
+            const bDateTime = new Date(`${b.date}T${b.time}`);
+            if (sortOrder === 'asc') {
+                return aDateTime - bDateTime;
+            } else {
+                return bDateTime - aDateTime;
+            }
+        });
+        
+        filtered.forEach(task => {
+
+            const div = document.createElement('div');
+            div.className = `task-card ${tab === 'validacion' ? 'val-' + task.state.replace(' ', '-') : ''}`;
+            
+            // Header is common to both
+            let headerHTML = `
+                <div class="card-top">
+                    <strong>${task.type} <span class="sec-cat-label">[${task.sec_category}]</span></strong>
+                    <div class="btn-row">
+                        ${task.hidden ? `<button class="mini-btn restore-btn" onclick="updateTask('${task.id}', {hidden:false})">Restore</button>` : ''}
+                        <span class="sec-cat-label">${task.date}</span>
+                        <button class="mini-btn" onclick="openEditModal('${task.id}')">Edit</button>
+                        <button class="mini-btn" onclick="updateTask('${task.id}', {hidden:true})">Hide</button>
+                        <button class="delete-btn" onclick="deleteTask('${task.id}')">✕</button>
+                    </div>
+                </div>`;
+
+            if (tab === 'envio') {
+                const perc = Math.round((task.current / task.total) * 100) || 0;
+                div.style.backgroundColor = `hsl(${perc * 1.2}, 70%, 88%)`;
+                let progressText = perc === 100 ? 'COMPLETED' : (task.current == 0 ? '' : `${task.current} / ${task.total}`);
+                
+                div.innerHTML = headerHTML + `
+                    <div class="progress-wrapper">
+                        <div class="progress-fill" style="width:${perc}%">${progressText}</div>
+                        <input type="range" class="live-slider" min="0" max="${task.total}" value="${task.current}" 
+                               oninput="updateSliderUI(this, ${task.total})" onchange="syncEnvProgress('${task.id}', this.value)">
+                    </div>`;
+            } else {
+                div.innerHTML = headerHTML + `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <select class="status-select" onchange="updateTask('${task.id}', {state: this.value})">
+                            <option value="pending" ${task.state === 'pending' ? 'selected' : ''}>Pending</option>
+                            <option value="in progress" ${task.state === 'in progress' ? 'selected' : ''}>In Progress</option>
+                            <option value="finished" ${task.state === 'finished' ? 'selected' : ''}>Finished</option>
+                        </select>
+                        <span class="sec-cat-label">${task.time}</span>
+                    </div>`;
+            }
+            container.appendChild(div);
+        });
+    }
+
+    function openEditModal(id) {
+        const task = allTasks.find(t => t.id === id);
+        if (!task) return;
+        document.getElementById('edit-id').value = task.id;
+        const editTypeSelect = document.getElementById('edit-type');
+        editTypeSelect.innerHTML = '';
+        TYPES.sort().forEach(t => {
+            let o = document.createElement('option'); o.value = o.text = t;
+            if(t === task.type) o.selected = true;
+            editTypeSelect.add(o);
+        });
+        document.getElementById('edit-date').value = task.date;
+        document.getElementById('edit-time').value = task.time;
+        const goalInput = document.getElementById('edit-goal'), goalLabel = document.getElementById('edit-goal-label');
+        if (task.tab === 'envio') {
+            goalInput.style.display = goalLabel.style.display = 'block';
+            goalInput.value = task.total;
+        } else {
+            goalInput.style.display = goalLabel.style.display = 'none';
+        }
+        document.getElementById('editModal').style.display = 'flex';
+    }
+
+    function closeModal() { document.getElementById('editModal').style.display = 'none'; }
+
+    async function submitEdit() {
+        const id = document.getElementById('edit-id').value;
+        const task = allTasks.find(t => t.id === id);
+        const updatedData = { type: document.getElementById('edit-type').value, date: document.getElementById('edit-date').value, time: document.getElementById('edit-time').value };
+        if (task.tab === 'envio') {
+            updatedData.total = parseInt(document.getElementById('edit-goal').value);
+            updatedData.state = task.current >= updatedData.total ? 'finished' : (task.current > 0 ? 'in progress' : 'pending');
+        }
+        await updateTask(id, updatedData);
+        closeModal();
+    }
+
+    function calculateGlobalPerc() {
+        const visibleTasks = allTasks.filter(t => !t.hidden);
+        if (visibleTasks.length === 0) { document.getElementById('globalPercentage').innerText = `0% Total Progress`; return; }
+        let sumOfUnits = 0;
+        visibleTasks.forEach(t => {
+            if (t.tab === 'envio') sumOfUnits += (parseInt(t.current) / parseInt(t.total)) || 0;
+            else sumOfUnits += (t.state === 'finished' ? 1.0 : (t.state === 'in progress' ? 0.5 : 0));
+        });
+        const globalPerc = Math.round((sumOfUnits / visibleTasks.length) * 100);
+        document.getElementById('globalPercentage').innerText = `${globalPerc}% Total Progress`;
+    }
+
+    async function handleSave(tab) {
+        const data = { tab: tab, type: document.getElementById(tab === 'envio' ? 'env-type' : 'val-type').value, date: document.getElementById(tab === 'envio' ? 'env-date' : 'val-date').value, time: document.getElementById(tab === 'envio' ? 'env-time' : 'val-time').value, state: tab === 'envio' ? 'pending' : document.getElementById('val-state').value, hidden: false, total: tab === 'envio' ? (parseInt(document.getElementById('env-goal').value) || 100) : 0, current: 0 };
+        await fetch('/tasks', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+        fetchTasks();
+    }
+
+    async function updateTask(id, fields) {
+        await fetch(`/tasks/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(fields) });
+        fetchTasks();
+    }
+
+    async function syncEnvProgress(id, val) {
+        const t = allTasks.find(x => x.id === id);
+        const state = val >= t.total ? 'finished' : (val > 0 ? 'in progress' : 'pending');
+        updateTask(id, {current: parseInt(val), state: state});
+    }
+
+    async function deleteTask(id) {
+        if (confirm("Permanently delete?")) {
+            await fetch(`/tasks/${id}`, { method: 'DELETE' });
+            allTasks = allTasks.filter(t => t.id !== id);
+            renderAll();
+        }
+    }
+
+    async function softClearTab() {
+        const ids = allTasks.filter(t => t.tab === currentTab && !t.hidden).map(t => t.id);
+        if (ids.length > 0) {
+            await fetch('/tasks/hide_visible', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ids}) });
+            fetchTasks();
+        }
+    }
+
+    function updateSliderUI(slider, total) {
+        const fill = slider.previousElementSibling;
+        const perc = Math.round((slider.value / total) * 100);
+        fill.style.width = perc + '%';
+        fill.innerText = perc === 100 ? 'COMPLETED' : (slider.value == 0 ? '' : `${slider.value} / ${total}`);
+        slider.closest('.task-card').style.backgroundColor = `hsl(${perc * 1.2}, 70%, 88%)`;
+    }
+
+    init();
+</script>
+</body>
+</html>
