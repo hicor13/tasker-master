@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, make_response
-import json, os, uuid, csv, io
+import json, os, uuid, csv, io, difflib
 
 app = Flask(__name__)
 DATA_FILE = 'tasks.json'
@@ -7,9 +7,9 @@ DATA_FILE = 'tasks.json'
 # Moved to the top so it's always accessible
 SEC_CAT_MAP = {
     "FOHVENC2": "CORE 21", "IBK01": "CORE 1", "IBK07": "CORE 1", "IBKT1A": "CORE 1","IBKHT6": "CORE 1",
-    "MAFT2T3": "CORE 1", "PRYT0A": "CORE 1", "SANT1": "CORE 1", "SANT2": "CORE 1",
-    "SANT2_DED": "CORE 1", "BFBT3A": "CORE 11", "BFBT0A": "CORE 11", "FOHCASTI": "CORE 11",
-    "IBK03": "CORE 11", "IBK04": "CORE 11", "MAFCAST": "CORE 11", "BFBT2A": "CORE 21",
+    "MAFT2T3": "CORE 1", "PRYT0A": "CORE 1", "SANT1": "CORE 1","SANT1_DED": "CORE 1", "SANT2": "CORE 1",
+    "SANT2_DED": "CORE 1", "BFBT3A": "CORE 11", "BFBT0A": "CORE 11", "BFBT1A": "CORE 11", "FOHCASTI": "CORE 11",
+    "IBK03": "CORE 11", "IBK04": "CORE 11", "MAFCAST": "CORE 11", "MAFJNR1": "CORE 11", "BFBT2A": "CORE 21",
     "BFBT6A": "CORE 21", "CNCCAST1": "CORE 21", "IBKVTS": "CORE 21", "IBKCIMA": "CORE 21",
     "FOHT1A": "CORE 21", "IBK08": "CORE 21", "IBKPREV1": "CORE 21",
 }
@@ -83,6 +83,30 @@ def export_csv(tab_type):
     output.headers["Content-Disposition"] = f"attachment; filename={tab_type}_export.csv"
     output.headers["Content-type"] = "text/csv"
     return output
+
+@app.route('/match_filename', methods=['POST'])
+def match_filename():
+    filename = request.json.get('filename', '')
+    types_list = list(SEC_CAT_MAP.keys())
+    
+    # Extract filename without extension
+    name_without_ext = os.path.splitext(filename)[0].upper()
+    
+    # Try exact match first
+    if name_without_ext in types_list:
+        return jsonify({"match": name_without_ext, "confidence": 1.0})
+    
+    # Try fuzzy matching with cutoff
+    matches = difflib.get_close_matches(name_without_ext, types_list, n=1, cutoff=0.6)
+    
+    if matches:
+        matched = matches[0]
+        # Calculate similarity score
+        ratio = difflib.SequenceMatcher(None, name_without_ext, matched).ratio()
+        return jsonify({"match": matched, "confidence": round(ratio, 2)})
+    
+    # No match found, return empty
+    return jsonify({"match": None, "confidence": 0})
 
 if __name__ == '__main__':
     app.run(port=5069, debug=True)
