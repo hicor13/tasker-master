@@ -98,7 +98,7 @@
 
 <div class="container">
     <div class="header-flex">
-        <h2>Task Meter <span id="globalPercentage" class="total-gauge">0% Total</span></h2>
+        <h2>Task Meter <span id="globalPercentage" class="total-gauge">0% Total</span><span id="pendingCount" class="total-gauge" style="background:#dc3545; margin-left:10px; display:none;">0 pending</span></h2>
         <div class="tab-nav">
             <button class="tab-btn active" id="btn-envio" onclick="switchTab('envio')">Envío Masivo</button>
             <button class="tab-btn" id="btn-validacion" onclick="switchTab('validacion')">Validación</button>
@@ -106,7 +106,7 @@
     </div>
 
     <div class="input-grid">
-        <input type="text" id="searchTxt" placeholder="🔍 Search Type, Core, or Date..." onkeyup="updateFilters(); renderAll()">
+        <input type="text" id="searchTxt" placeholder="🔍 Search Type, Core, Date, State, or type ALL" onkeyup="updateFilters(); renderAll()">
         <input type="date" id="searchDate" onchange="updateFilters(); renderAll()">
         <select id="filterType" onchange="updateFilters(); renderAll()"><option value="">All Types</option></select>
         <select id="filterCore" onchange="updateFilters(); renderAll()"><option value="">All Cores</option></select>
@@ -170,7 +170,7 @@
 <script>
     let allTasks = [];
     let currentTab = 'envio';
-    const TYPES = ["FOHVENC2", "IBK01", "IBK07", "IBKT1A", "MAFT2T3", "PRYT0A", "SANT1", "SANT2", "SANT2_DED", "BFBT0A", "BFBT3A", "FOHCASTI", "IBK03", "IBK04", "MAFCAST", "BFBT2A", "BFBT6A", "CNCCAST1", "FOHT1A", "IBK08", "IBKHT6", "IBKCIMA", "IBKPREV1", "IBKVTS"];
+    const TYPES = ["FOHVENC2", "IBK01", "IBK07", "IBKT1A", "MAFT2T3", "MAFJNR1", "PRYT0A", "SANT1",  "SANT1_DED","SANT2", "SANT2_DED", "BFBT0A", "BFBT1A", "BFBT3A", "FOHCASTI", "IBK03", "IBK04", "MAFCAST", "BFBT2A", "BFBT6A", "CNCCAST1", "FOHT1A", "IBK08", "IBKHT6", "IBKCIMA", "IBKPREV1", "IBKVTS"];
 
     let tabFilters = {
         envio: {
@@ -259,14 +259,30 @@
         
         // Apply filters
         let filtered = tasks.filter(task => {
-            const isMatch = (task.type.toLowerCase().includes(search) || task.sec_category.toLowerCase().includes(search) || task.date.includes(search));
+            const showAll = ['all', 'everything', 'show everything', 'showall', 'show-all'].includes(search.trim().toLowerCase());
+            const searchLower = search.toLowerCase();
+            
+            // Check state-based search
+            let stateMatch = false;
+            if (tab === 'envio') {
+                const isComplete = parseInt(task.current) >= parseInt(task.total);
+                stateMatch = ['finished', 'complete', '100%', 'done'].some(s => searchLower.includes(s)) && isComplete ||
+                             ['not finished', 'not complete', 'incomplete', 'not 100%', 'pending'].some(s => searchLower.includes(s)) && !isComplete;
+            } else {
+                stateMatch = ['finished', 'complete', '100%', 'done'].some(s => searchLower.includes(s)) && task.state === 'finished' ||
+                             ['pending'].some(s => searchLower.includes(s)) && task.state === 'pending' ||
+                             ['in progress', 'progress'].some(s => searchLower.includes(s)) && task.state === 'in progress' ||
+                             ['not finished', 'not complete', 'incomplete', 'not 100%'].some(s => searchLower.includes(s)) && task.state !== 'finished';
+            }
+            
+            const isMatch = showAll || stateMatch || task.type.toLowerCase().includes(search) || task.sec_category.toLowerCase().includes(search) || task.date.includes(search);
             const dateMatch = sDate ? task.date === sDate : true;
             const typeMatch = fType ? task.type === fType : true;
             const coreMatch = fCore ? task.sec_category === fCore : true;
             const timeMatch = fTime ? task.time === fTime : true;
 
-            if (!search && !sDate && !fType && !fCore && !fTime && task.hidden) return false;
-            if ((search || sDate || fType || fCore || fTime) && (!isMatch || !dateMatch || !typeMatch || !coreMatch || !timeMatch)) return false;
+            if (!showAll && !search && !sDate && !fType && !fCore && !fTime && task.hidden) return false;
+            if (!showAll && (search || sDate || fType || fCore || fTime) && (!isMatch || !dateMatch || !typeMatch || !coreMatch || !timeMatch)) return false;
 
             return true;
         });
@@ -287,6 +303,25 @@
             const div = document.createElement('div');
             div.className = `task-card ${tab === 'validacion' ? 'val-' + task.state.replace(' ', '-') : ''}`;
             
+            // Time visualizer: color based on age
+            const created = new Date(`${task.date}T${task.time}`);
+            const now = new Date();
+            const elapsedMs = now - created;
+            const elapsedHours = elapsedMs / (1000 * 60 * 60);
+            const isCompleted = (tab === 'envio' && task.current >= task.total) || (tab === 'validacion' && task.state === 'finished');
+            let hue;
+            if (isCompleted) {
+                hue = 120; // green
+            } else if (elapsedHours < .7) {
+                hue = 120; // green
+            } else if (elapsedHours < 2) {
+                hue = 30; // orange
+            } else {
+                hue = 0; // red
+            }
+            const timeColor = `hsl(${hue}, 70%, 50%)`;
+            const timeVisualizer = `<span class="time-visualizer" style="color: ${timeColor}; font-weight: bold; margin-left: 5px;">${task.time}</span>`;
+            
             // Header is common to both
             let headerHTML = `
                 <div class="card-top">
@@ -294,6 +329,7 @@
                     <div class="btn-row">
                         ${task.hidden ? `<button class="mini-btn restore-btn" onclick="updateTask('${task.id}', {hidden:false})">Restore</button>` : ''}
                         <span class="sec-cat-label">${task.date}</span>
+                        ${timeVisualizer}
                         <button class="mini-btn" onclick="openEditModal('${task.id}')">Edit</button>
                         <button class="mini-btn" onclick="updateTask('${task.id}', {hidden:true})">Hide</button>
                         <button class="delete-btn" onclick="deleteTask('${task.id}')">✕</button>
@@ -304,10 +340,11 @@
                 const perc = Math.round((task.current / task.total) * 100) || 0;
                 div.style.backgroundColor = `hsl(${perc * 1.2}, 70%, 88%)`;
                 let progressText = perc === 100 ? 'COMPLETED' : (task.current == 0 ? '' : `${task.current} / ${task.total}`);
+                const progressColor = `hsl(${perc * 1.2}, 70%, 70%)`; // darker shade but closer to bar
                 
                 div.innerHTML = headerHTML + `
-                    <div class="progress-wrapper">
-                        <div class="progress-fill" style="width:${perc}%">${progressText}</div>
+                    <div class="progress-wrapper" style="background: hsl(${perc * 1.2}, 70%, 88%);">
+                        <div class="progress-fill" style="width:${perc}%; background-color: ${progressColor}; justify-content: center; align-items: center;">${progressText}</div>
                         <input type="range" class="live-slider" min="0" max="${task.total}" value="${task.current}" 
                                oninput="updateSliderUI(this, ${task.total})" onchange="syncEnvProgress('${task.id}', this.value)">
                     </div>`;
@@ -319,7 +356,6 @@
                             <option value="in progress" ${task.state === 'in progress' ? 'selected' : ''}>In Progress</option>
                             <option value="finished" ${task.state === 'finished' ? 'selected' : ''}>Finished</option>
                         </select>
-                        <span class="sec-cat-label">${task.time}</span>
                     </div>`;
             }
             container.appendChild(div);
@@ -365,14 +401,29 @@
 
     function calculateGlobalPerc() {
         const visibleTasks = allTasks.filter(t => !t.hidden);
-        if (visibleTasks.length === 0) { document.getElementById('globalPercentage').innerText = `0% Total Progress`; return; }
-        let sumOfUnits = 0;
-        visibleTasks.forEach(t => {
-            if (t.tab === 'envio') sumOfUnits += (parseInt(t.current) / parseInt(t.total)) || 0;
-            else sumOfUnits += (t.state === 'finished' ? 1.0 : (t.state === 'in progress' ? 0.5 : 0));
+        if (visibleTasks.length === 0) { document.getElementById('globalPercentage').innerText = `0% Total Progress`; }
+        else {
+            let sumOfUnits = 0;
+            visibleTasks.forEach(t => {
+                if (t.tab === 'envio') sumOfUnits += (parseInt(t.current) / parseInt(t.total)) || 0;
+                else sumOfUnits += (t.state === 'finished' ? 1.0 : (t.state === 'in progress' ? 0.5 : 0));
+            });
+            const globalPerc = Math.round((sumOfUnits / visibleTasks.length) * 100);
+            document.getElementById('globalPercentage').innerText = `${globalPerc}% Total Progress`;
+        }
+
+        const pendingTasks = allTasks.filter(t => {
+            if (t.tab === 'envio') return parseInt(t.current) < parseInt(t.total);
+            return t.state !== 'finished';
         });
-        const globalPerc = Math.round((sumOfUnits / visibleTasks.length) * 100);
-        document.getElementById('globalPercentage').innerText = `${globalPerc}% Total Progress`;
+        const pendingCount = pendingTasks.length;
+        const pendingEl = document.getElementById('pendingCount');
+        if (pendingCount > 0) {
+            pendingEl.style.display = 'inline-block';
+            pendingEl.innerText = `${pendingCount} pending`;
+        } else {
+            pendingEl.style.display = 'none';
+        }
     }
 
     async function handleSave(tab) {
@@ -413,10 +464,21 @@
         const perc = Math.round((slider.value / total) * 100);
         fill.style.width = perc + '%';
         fill.innerText = perc === 100 ? 'COMPLETED' : (slider.value == 0 ? '' : `${slider.value} / ${total}`);
-        slider.closest('.task-card').style.backgroundColor = `hsl(${perc * 1.2}, 70%, 88%)`;
+        fill.style.backgroundColor = `hsl(${perc * 1.2}, 70%, 70%)`; // darker shade but closer to bar
+        const card = slider.closest('.task-card');
+        card.style.backgroundColor = `hsl(${perc * 1.2}, 70%, 88%)`;
+        card.querySelector('.progress-wrapper').style.background = `hsl(${perc * 1.2}, 70%, 88%)`;
+    }
+
+    async function fetchTasks() {
+        const response = await fetch('/tasks');
+        allTasks = await response.json();
+        renderAll();
     }
 
     init();
+    // Update time colors every minute
+    setInterval(renderAll, 60000);
 </script>
 </body>
 </html>
